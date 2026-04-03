@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediBook - History</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar (same as booking.html) -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="booking.html"><i class="fas fa-hospital"></i> MediBook</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="booking.html"><i class="fas fa-calendar-plus"></i> Booking</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="history.html"><i class="fas fa-history"></i> View History</a></li>
+                    <li class="nav-item"><a class="nav-link" href="about.html"><i class="fas fa-user-md"></i> About Us</a></li>
+                    <li class="nav-item"><a class="nav-link" href="contact.html"><i class="fas fa-phone"></i> Contact Us</a></li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="profile.html">Profile</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout()">Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5 pt-5">
+        <h2 class="my-4"><i class="fas fa-history"></i> Appointment History</h2>
+        <div class="card">
+            <div class="card-body">
+                <table class="table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Time Slot</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+<script src="js/sessionManager.js"></script>
+<script>
+    const API_URL = "http://localhost:5000/api";
+
+    // Check authentication once
+    if (!SessionManager.requireAuth()) {
+        window.location.href = 'login.html';
+        throw new Error('Authentication required');
+    }
+
+    // Get session data once
+    const session = SessionManager.getCurrentSession();
+    const { token, user } = session;
+    const userId = user._id;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadHistory();
+        updateSessionSwitcher();
+    });
+
+    // Add session switcher for multiple patient accounts
+    function updateSessionSwitcher() {
+        const sessions = SessionManager.getAllSessions()
+            .filter(s => s.user.role === 'patient');
+        
+        if (sessions.length > 1) {
+            const dropdown = document.querySelector('.dropdown-menu');
+            const switcherHtml = sessions.map(s => `
+                <li>
+                    <a class="dropdown-item ${s.userId === session.userId ? 'active' : ''}" 
+                       href="#" 
+                       onclick="switchSession('${s.userId}')">
+                        Switch to ${s.user.name}
+                    </a>
+                </li>
+            `).join('');
+            
+            // Insert session switcher before the divider
+            const divider = dropdown.querySelector('.dropdown-divider');
+            if (divider) {
+                divider.insertAdjacentHTML('beforebegin', switcherHtml);
+            }
+        }
+    }
+
+    function switchSession(userId) {
+        SessionManager.setActiveSession(userId);
+        window.location.reload();
+    }
+
+    // Update logout to use SessionManager
+    function logout() {
+        const currentUser = SessionManager.getCurrentSession();
+        if (currentUser) {
+            SessionManager.clearSession(currentUser.userId);
+            const remainingSessions = SessionManager.getAllSessions();
+            if (remainingSessions.length > 0) {
+                SessionManager.setActiveSession(remainingSessions[0].userId);
+                window.location.reload();
+            } else {
+                window.location.href = 'login.html';
+            }
+        }
+    }
+
+        function getStatusBadge(status) {
+            if (status === "Pending") return `<span class="badge bg-warning text-dark">${status}</span>`;
+            if (status === "Confirmed") return `<span class="badge bg-success">${status}</span>`;
+            if (status === "Completed") return `<span class="badge bg-primary">${status}</span>`;
+            if (status === "Cancelled") return `<span class="badge bg-danger">${status}</span>`;
+            return status;
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch(`${API_URL}/appointments/my/${userId}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const data = await res.json();
+                const tbody = document.querySelector('#historyTable tbody');
+                tbody.innerHTML = '';
+
+                if (!data.success || !data.appointments.length) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center">No appointment history.</td></tr>';
+                    return;
+                }
+
+                // Filter to show only cancelled and completed appointments
+                const historyAppointments = data.appointments.filter(a => 
+                    a.status === "Cancelled" || a.status === "Completed"
+                );
+
+                if (historyAppointments.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center">No appointment history.</td></tr>';
+                    return;
+                }
+
+                // Sort by date (most recent first)
+                historyAppointments.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                historyAppointments.forEach(a => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${new Date(a.date).toLocaleDateString()}</td>
+                        <td>${a.time_slot}</td>
+                        <td>${getStatusBadge(a.status)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
