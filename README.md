@@ -75,6 +75,33 @@ Use Postman/Insomnia or curl.
 5. Check MongoDB to validate appointment writes
 6. Check Twilio SMS logs after status update
 
+### ✅ Black-box test cases (project-specific)
+| Test ID | Test Scenario | Test Case Description | Test Data | Expected Result | Status |
+|--------|---------------|-----------------------|-----------|-----------------|--------|
+| BV001 | Input Validation | Register with invalid email format | `email: invalidmail` | Validation error or failed register | Pass |
+| BV002 | Input Validation | Password too short | `password: short` | Validation error | Pass |
+| BV003 | Data Limit | Submit very long text fields | Long strings for name/address | Input handled; no crash | Pass |
+| BV004 | Duplicate Booking | Two patients attempt same slot | Patient A/B same date/time | One success, one conflict error | Pass |
+| BV005 | Missing Fields | Book appointment without date/time | Missing `date` or `time_slot` | Validation error | Pass |
+| BV006 | Unauthorized Access | Patient requests doctor-only route | Patient token on `/api/appointments/status/...` | 403 Access denied | Pass |
+
+### 📐 Additional test cases for stability
+| Test ID | Test Scenario | Test Case Description | Test Data | Expected Result | Status |
+|--------|---------------|-----------------------|-----------|-----------------|--------|
+| WC001 | Booking workflow | Book available slot | valid patient + slot | 201 booked (Pending) | Pass |
+| WC002 | Slot conflict | Book already occupied slot | existing appointment slot | 400 conflict | Pass |
+| WC003 | Status update & SMS | Confirm appointment | `patch` status="Confirmed" | 200 + SMS service call | Pass |
+| WC004 | Cancel appointment | Cancel existing appointment | `PUT /api/appointments/cancel/:id` | 200 + `Cancelled` status + SMS | Pass |
+| WC005 | Profile update | Update patient info | `/api/auth/profile/update/:userId` | 200 + updated user object | Pass |
+
+## 🧩 Architecture and UML alignment
+The UML diagrams in `docs/UML_DIAGRAMS.md` should reflect these implemented entities and flows:
+- **Entities**: `User` (patient), `Doctor`, `Appointment`, plus doctor schedule and booked slots.
+- **Relationships**: 1 doctor has many appointments; 1 patient has many appointments; each appointment links one doctor and one patient.
+- **Use cases**: Register/login, book appointment, update status, cancel appointment, view history, send SMS.
+- **Activity**: Patient booking flow, doctor status update flow, SMS notification flow.
+- **Sequence**: API request -> auth -> data validation -> DB write -> Twilio SMS trigger.
+
 ## 🔒 Session and Security Notes
 - JWT tokens are stored as HTTP-only cookies (or client storage in UI scripts).
 - Protected routes require `Authorization: Bearer <token>`.
